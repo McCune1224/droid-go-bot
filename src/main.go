@@ -5,82 +5,54 @@ import (
 	"os"
 	"os/signal"
 
-	// "github.com/McCune1224/oomdroid/internal/commands"
 	"github.com/McCune1224/oomdroid/internal/commands"
-	"github.com/bwmarrin/discordgo"
+	dg "github.com/bwmarrin/discordgo"
 	_ "github.com/joho/godotenv/autoload"
 )
 
-// Add Slash Command Details
+// Create Bot Session
 var (
-	discordBot *discordgo.Session
+	discordBot *dg.Session
 )
 
-// Load env stuff
 func init() {
 	var err error
 	token := os.Getenv("BOT_TOKEN")
-	discordBot, err = discordgo.New("Bot " + token)
+	discordBot, err = dg.New("Bot " + token)
 	if err != nil {
 		log.Fatal(err.Error())
 	}
 }
 
-var slashCommands = []*discordgo.ApplicationCommand{
-	{
-		Name:        "ping",
-		Description: "Returns 'Pong!'",
-	},
-	{
-		Name:        "foobar",
-		Description: "Returns 'Foobar'",
-	},
-}
-
-var slashCommandHandlers = map[string]func(s *discordgo.Session, i *discordgo.InteractionCreate){
-	"ping": func(s *discordgo.Session, i *discordgo.InteractionCreate) {
-		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-			Type: discordgo.InteractionResponseChannelMessageWithSource,
-			Data: &discordgo.InteractionResponseData{
-				Content: "Pong!",
-			},
-		})
-	},
-	"foobar": commands.Foobar}
+// Create Command Handler and Register Slash Commands
+var oomSCM *commands.SCM
 
 func init() {
-	discordBot.AddHandler(func(s *discordgo.Session, i *discordgo.InteractionCreate) {
-		if h, ok := slashCommandHandlers[i.ApplicationCommandData().Name]; ok {
-			h(discordBot, i)
+	oomSCM = commands.NewSCM()
+	oomSCM.AddCommand(commands.Ping)
+	//Create handler for interactionCreation (required for Responding to slash commands)
+	discordBot.AddHandler(func(s *dg.Session, i *dg.InteractionCreate) {
+		log.Print(i.ApplicationCommandData().Name)
+		if cmd, ok := oomSCM.SlashCommands[i.ApplicationCommandData().Name]; ok {
+			cmd.Handler(s, i)
 		}
 	})
 }
 
+// Create Websocket Connection, Register Commands, and run until signal close
 func main() {
 	var err error
 
 	err = discordBot.Open()
-	defer discordBot.Close()
 	if err != nil {
 		log.Fatal(err.Error())
 	}
+	regCommandTally := oomSCM.RegisterCommands(discordBot)
+	log.Printf("Successfully registered %d/%d commands", len(oomSCM.SlashCommands), regCommandTally)
+	defer discordBot.Close()
 
-	log.Println("Adding commands...")
-	registeredCommands := make([]*discordgo.ApplicationCommand, len(slashCommands))
-	for i, v := range slashCommands {
-		cmd, err := discordBot.ApplicationCommandCreate(discordBot.State.User.ID, "", v)
-		if err != nil {
-			log.Panicf("Cannot create '%v' command: %v", v.Name, err)
-		}
-		registeredCommands[i] = cmd
-	}
-	log.Printf("Added %d command(s)", len(registeredCommands))
-	//Open Connection
-
-	//Make Channel to listen for exit signal
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt)
 	log.Printf("%s Listening for Commands", discordBot.State.User.Username)
-	log.Println("Press Ctrl+C to exit")
 	<-stop
 }

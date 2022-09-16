@@ -30,6 +30,7 @@ var oomSCM *commands.SCM
 func init() {
 	oomSCM = commands.NewSCM()
 	oomSCM.AddCommand(commands.Ping)
+	oomSCM.AddCommand(commands.Rps)
 	//Create handler for interactionCreation (required for Responding to slash commands)
 	discordBot.AddHandler(func(s *dg.Session, i *dg.InteractionCreate) {
 		log.Print(i.ApplicationCommandData().Name)
